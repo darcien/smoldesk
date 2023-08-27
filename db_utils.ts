@@ -18,14 +18,22 @@ export type Db = {
   unavailabilities?: { [unavailabilityId: string]: DbUnavailability };
 };
 
-let db: Db = {};
+export async function getDb() {
+  let db: Db = {};
 
-try {
-  db = JSON.parse(await Deno.readTextFile("./db.json")) || {};
-} catch {
-  // ignore for now
+  try {
+    db = JSON.parse(await Deno.readTextFile("./db.json")) || {};
+  } catch {
+    // ignore for now
+    console.log("Failed to load db.json...");
+  }
+  return db;
 }
 
-export function getDb() {
+export async function saveDb(db: Db) {
+  await Deno.writeTextFile(
+    "./db.json",
+    JSON.stringify(db),
+  );
   return db;
 }

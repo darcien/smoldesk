@@ -1,20 +1,17 @@
-import { formatInTimeZone } from "https://esm.sh/date-fns-tz@2.0.0";
 import {
   blastMessageToAllWebooks,
   formatDateForDiscord,
 } from "./discord_utils.ts";
 import { fetchUserAvailability, TimeRange } from "./request_utils.ts";
-import { Db, getDb } from "./db_utils.ts";
+import { getDb, saveDb } from "./db_utils.ts";
+import { toJakartaDate } from "./date_utils.ts";
 
-const userAvailability = await fetchUserAvailability();
+const { availableUsers, unavailableUsers } = await fetchUserAvailability();
 
-const availableUsers = userAvailability.available;
-const unavailableUsers = userAvailability.unavailable;
-
-const db = getDb();
-const users = { ...db.users };
-const ptos = { ...db.ptos };
-const unavailabilities = { ...db.unavailabilities };
+const oldDb = await getDb();
+const users = { ...oldDb.users };
+const ptos = { ...oldDb.ptos };
+const unavailabilities = { ...oldDb.unavailabilities };
 
 for (const user of availableUsers) {
   users[user.id] = {
@@ -31,10 +28,9 @@ for (const user of availableUsers) {
 }
 const separator = "|";
 function makeUnavailabilityId(
-  { userId, today }: { userId: string; today: Date },
+  { userId }: { userId: string },
 ) {
-  const formattedDate = formatInTimeZone(today, "Asia/Jakarta", "yyyy-MM-dd");
-  return [userId, formattedDate].join(separator);
+  return [userId, toJakartaDate(new Date())].join(separator);
 }
 
 for (const user of unavailableUsers) {
@@ -45,7 +41,6 @@ for (const user of unavailableUsers) {
 
   const unavailabilityId = makeUnavailabilityId({
     userId: user.id,
-    today: new Date(),
   });
   unavailabilities[unavailabilityId] = {
     userId: user.id,
@@ -54,11 +49,13 @@ for (const user of unavailableUsers) {
   };
 }
 
-const addedPtos = Object.values(ptos).filter((pto) => !db.ptos?.[pto.id]);
-const removedPtos = Object.values(db.ptos || {}).filter((pto) => !ptos[pto.id]);
+const addedPtos = Object.values(ptos).filter((pto) => !oldDb.ptos?.[pto.id]);
+const removedPtos = Object.values(oldDb.ptos || {}).filter((pto) =>
+  !ptos[pto.id]
+);
 const addedUnavailabilities = Object.keys(unavailabilities).filter((
   unavailabilityId,
-) => !db.unavailabilities?.[unavailabilityId]).map((unavailabilityId) =>
+) => !oldDb.unavailabilities?.[unavailabilityId]).map((unavailabilityId) =>
   unavailabilities[unavailabilityId]
 );
 
@@ -117,10 +114,6 @@ for (const addedUnavailability of addedUnavailabilities) {
   );
 }
 
-const updatedDb: Db = { users, ptos, unavailabilities };
-await Deno.writeTextFile(
-  "./db.json",
-  JSON.stringify(updatedDb),
-);
+await saveDb({ users, ptos, unavailabilities });
 
 console.log("Done");

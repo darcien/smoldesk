@@ -162,5 +162,9 @@ export async function fetchUserAvailability() {
   });
   const json = await res.json();
   const { data } = resSchema.parse(json);
-  return data.usersAvailabilityAndBirthday;
+  const { available, unavailable } = data.usersAvailabilityAndBirthday;
+  return {
+    availableUsers: available,
+    unavailableUsers: unavailable,
+  };
 }

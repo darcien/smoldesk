@@ -47,10 +47,14 @@ export async function blastMessageToAllWebooks(message: string) {
   );
 
   const failed = all.filter((res) => res.status === "rejected");
-  console.log(
-    `Failed to send to ${failed.length} out of ${all.length} webhooks`,
-    { failed },
-  );
+  if (failed.length > 0) {
+    console.log(
+      `Failed to send to ${failed.length} out of ${all.length} webhooks`,
+      { failed },
+    );
+  }
+
+  return all;
 }
 
 export function formatDateForDiscord(
