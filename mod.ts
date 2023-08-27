@@ -64,9 +64,7 @@ function getFirstName({ userId }: { userId: string }) {
 }
 
 const addedPtoMessages = addedPtos.map((addedPto) =>
-  `🏝️ PTO approved for ${
-    getFirstName({ userId: addedPto.userId })
-  }, happening in ${
+  `🏝️ PTO approved for ${getFirstName({ userId: addedPto.userId })}, happening ${
     formatDateForDiscord(new Date(addedPto.requestDate), "relative")
   } for ${addedPto.totalDay} day(s).`
 );
