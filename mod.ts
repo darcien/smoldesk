@@ -64,7 +64,9 @@ function getFirstName({ userId }: { userId: string }) {
 }
 
 const addedPtoMessages = addedPtos.map((addedPto) =>
-  `🏝️ PTO approved for ${getFirstName({ userId: addedPto.userId })}, happening ${
+  `✅ PTO approved for ${
+    getFirstName({ userId: addedPto.userId })
+  }, happening ${
     formatDateForDiscord(new Date(addedPto.requestDate), "relative")
   } for ${addedPto.totalDay} day(s).`
 );
@@ -81,11 +83,18 @@ function formatTimeRange(timeRange: TimeRange) {
       return `at ${timeRange} (raw)`;
   }
 }
-const addedUnavailabilityMessages = addedUnavailabilities.map((unavail) =>
-  `😷 ${getFirstName({ userId: unavail.userId })} will be unavailable today ${
-    formatTimeRange(unavail.unavailableTime)
-  }.`
-);
+const addedUnavailabilityMessages = addedUnavailabilities.map((unavail) => {
+  const firstName = getFirstName({ userId: unavail.userId });
+  const formattedUnavailTime = formatTimeRange(unavail.unavailableTime);
+  switch (unavail.availability) {
+    case "onSickLeave":
+      return `😷 ${firstName} will be on sick leave today ${formattedUnavailTime}.`;
+    case "onPto":
+      return `🏝️ ${firstName} will be unavailable today ${formattedUnavailTime}.`;
+    default:
+      return `🧨 ${firstName} will be missing today ${formattedUnavailTime}. (debug: ${unavail.availability})`;
+  }
+});
 
 const message = [
   ...addedPtoMessages,
