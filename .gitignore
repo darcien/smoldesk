@@ -1,3 +1,5 @@
 .env
 db.json
 *.bak
+webhooks.json
+*.schema.json

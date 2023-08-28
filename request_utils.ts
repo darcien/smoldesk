@@ -1,5 +1,4 @@
-import { load } from "https://deno.land/std@0.197.0/dotenv/mod.ts";
-import { z } from "https://deno.land/x/zod@v3.21.4/mod.ts";
+import { load, z } from "./deps.ts";
 
 const config = await load();
 

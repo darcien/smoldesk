@@ -87,6 +87,9 @@
     "https://deno.land/x/zod@v3.21.4/index.ts": "d27aabd973613985574bc31f39e45cb5d856aa122ef094a9f38a463b8ef1a268",
     "https://deno.land/x/zod@v3.21.4/locales/en.ts": "a7a25cd23563ccb5e0eed214d9b31846305ddbcdb9c5c8f508b108943366ab4c",
     "https://deno.land/x/zod@v3.21.4/mod.ts": "64e55237cb4410e17d968cd08975566059f27638ebb0b86048031b987ba251c4",
-    "https://deno.land/x/zod@v3.21.4/types.ts": "b5d061babea250de14fc63764df5b3afa24f2b088a1d797fc060ba49a0ddff28"
+    "https://deno.land/x/zod@v3.21.4/types.ts": "b5d061babea250de14fc63764df5b3afa24f2b088a1d797fc060ba49a0ddff28",
+    "https://esm.sh/v131/zod-to-json-schema@3.21.4/denonext/zod-to-json-schema.mjs": "0460d2051daf743fb67acf6b93756d34c415ee12197ed38bbdb135668f97ea37",
+    "https://esm.sh/v131/zod@3.22.0/denonext/zod.mjs": "34846440360db7263fecfc642204cb3b63d6ca8eaa666988c89181f1d358ea5b",
+    "https://esm.sh/zod-to-json-schema@3.21.4/": "f3fe0c36a6bc7f2b817dc2cf680cdb81c366c5775e21ea81a8e03264dbaeb34b"
   }
 }

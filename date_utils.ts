@@ -1,4 +1,4 @@
-import { minitz } from "https://deno.land/x/minitz@4.0.5/src/minitz.js";
+import { minitz } from "./deps.ts";
 
 export function toJakartaDate(
   date: Date,

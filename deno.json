@@ -1,5 +1,6 @@
 {
   "tasks": {
+    "schema": "deno run --allow-write=. make_json_schema.ts",
     "blast": "deno run --allow-read=. --allow-write=. --allow-env --allow-net mod.ts",
     "debug": "deno run --allow-read=. --allow-env debug.ts"
   }

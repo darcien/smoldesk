@@ -1,5 +1,4 @@
-import { RESTPostAPIWebhookWithTokenJSONBody } from "https://deno.land/x/discord_api_types@0.37.52/v10.ts";
-import { load } from "https://deno.land/std@0.197.0/dotenv/mod.ts";
+import { load, RESTPostAPIWebhookWithTokenJSONBody } from "./deps.ts";
 
 const config = await load();
 

@@ -25,7 +25,7 @@ export async function getDb() {
     db = JSON.parse(await Deno.readTextFile("./db.json")) || {};
   } catch {
     // ignore for now
-    console.log("Failed to load db.json...");
+    console.log("⚠️ ./db.json not found, proceeding with empty db...");
   }
   return db;
 }

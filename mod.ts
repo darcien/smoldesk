@@ -101,6 +101,9 @@ const message = [
   ...addedUnavailabilityMessages,
 ].join("\n");
 
+// TODO: Need major refactor to make the initial fetch dont do any filter
+// (or filter based on flattened webhooks config),
+// iterate over the config to craft the messages and send per webhook URL.
 await blastMessageToAllWebooks(message);
 
 for (const addedPto of addedPtos) {
