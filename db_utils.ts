@@ -1,4 +1,5 @@
 import { PtoRequest, UserId, UserWithRequests } from "./request_utils.ts";
+import { parse } from "./deps.ts";
 
 export type DbUser = Pick<UserWithRequests, "id" | "name">;
 
@@ -18,6 +19,12 @@ export type Db = {
   unavailabilities?: { [unavailabilityId: string]: DbUnavailability };
 };
 
+const flags = parse(Deno.args, {
+  boolean: ["dry-run"],
+});
+
+const dryRun = flags["dry-run"];
+
 export async function getDb() {
   let db: Db = {};
 
@@ -31,6 +38,10 @@ export async function getDb() {
 }
 
 export async function saveDb(db: Db) {
+  if (dryRun) {
+    console.log("📝 dry run, not saving db...");
+    return db;
+  }
   await Deno.writeTextFile(
     "./db.json",
     JSON.stringify(db),

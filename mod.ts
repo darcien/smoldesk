@@ -107,20 +107,26 @@ const message = [
 await blastMessageToAllWebooks(message);
 
 for (const addedPto of addedPtos) {
-  const message = `Added PTO for ${users[addedPto.userId]
-    ?.name}: ${addedPto.requestDate} - ${addedPto.endDate}`;
+  const message = `Added PTO for ${
+    users[addedPto.userId]
+      ?.name
+  }: ${addedPto.requestDate} - ${addedPto.endDate}`;
   console.log(message);
 }
 for (const removedPto of removedPtos) {
   console.log(
-    `Removed PTO for ${users[removedPto.userId]
-      ?.name}: ${removedPto.requestDate} - ${removedPto.endDate}`,
+    `Removed PTO for ${
+      users[removedPto.userId]
+        ?.name
+    }: ${removedPto.requestDate} - ${removedPto.endDate}`,
   );
 }
 for (const addedUnavailability of addedUnavailabilities) {
   console.log(
-    `Added Unavailability for ${users[addedUnavailability.userId]
-      ?.name}: ${addedUnavailability.availability} - ${addedUnavailability.unavailableTime}}`,
+    `Added Unavailability for ${
+      users[addedUnavailability.userId]
+        ?.name
+    }: ${addedUnavailability.availability} - ${addedUnavailability.unavailableTime}`,
   );
 }
 

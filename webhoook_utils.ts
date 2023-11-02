@@ -3,6 +3,8 @@ import { z } from "./deps.ts";
 export const webhooksConfigSchema = z.object({
   $schema: z.string(),
   discord: z.array(z.object({
+    description: z.string(),
+    disabled: z.boolean().optional(),
     url: z.string().url(),
     filter: z.object({
       // unimplemented

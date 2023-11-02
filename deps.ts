@@ -8,3 +8,5 @@ export { minitz } from "https://deno.land/x/minitz@4.0.5/src/minitz.js";
 
 // Importing from non deno.land package brings LSP perf to rock bottom
 export { zodToJsonSchema } from "https://esm.sh/zod-to-json-schema@3.21.4/";
+
+export { parse } from "https://deno.land/std@0.202.0/flags/mod.ts";
