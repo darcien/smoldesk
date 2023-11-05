@@ -83,6 +83,9 @@ mutation RefreshSession($refreshToken: String!) {
   return refreshSessionSchema.parse(json).data.refreshSession;
 }
 
+/**
+ * @deprecated
+ */
 export async function fetchUserAvailability() {
   const res = await fetch(apiUrl, {
     method: "POST",
