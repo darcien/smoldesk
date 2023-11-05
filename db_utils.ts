@@ -1,5 +1,6 @@
+import { RuntimeConfig } from "./config_utils.ts";
+import { logger } from "./logger_utils.ts";
 import { PtoRequest, UserId, UserWithRequests } from "./request_utils.ts";
-import { parse } from "./deps.ts";
 
 export type DbUser = Pick<UserWithRequests, "id" | "name">;
 
@@ -19,32 +20,26 @@ export type Db = {
   unavailabilities?: { [unavailabilityId: string]: DbUnavailability };
 };
 
-const flags = parse(Deno.args, {
-  boolean: ["dry-run"],
-});
-
-const dryRun = flags["dry-run"];
-
-export async function getDb() {
-  let db: Db = {};
-
+export async function getDb(): Promise<Db> {
   try {
-    db = JSON.parse(await Deno.readTextFile("./db.json")) || {};
+    return JSON.parse(await Deno.readTextFile("./db.json")) || {};
   } catch {
     // ignore for now
-    console.log("⚠️ ./db.json not found, proceeding with empty db...");
+    logger().info("./db.json not found, proceeding with empty db");
+    return {};
   }
-  return db;
 }
 
-export async function saveDb(db: Db) {
-  if (dryRun) {
-    console.log("📝 dry run, not saving db...");
-    return db;
+export async function saveDb(runtimeConfig: RuntimeConfig, newDb: Db) {
+  if (runtimeConfig.dryRun) {
+    logger().info("Running in dry run mode, changes not persisted");
+    return newDb;
   }
+
+  logger().info("Persisting changes to disk...");
   await Deno.writeTextFile(
     "./db.json",
-    JSON.stringify(db),
+    JSON.stringify(newDb),
   );
-  return db;
+  return newDb;
 }

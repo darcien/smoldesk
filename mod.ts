@@ -1,135 +1,147 @@
+import { MessageToSend } from "./discord_utils.ts";
+import { fetchAllUsersAvailability } from "./request_utils.ts";
+import { Db, getDb } from "./db_utils.ts";
+import { getUserIdsForReporting, loadConfigs } from "./config_utils.ts";
+import { mapUnavailUserToDbUnavailTuple } from "./map_utils.ts";
+import { formatUnavailabilityMessage } from "./format_utils.ts";
+import { logger } from "./logger_utils.ts";
 import {
-  blastMessageToAllWebooks,
-  formatDateForDiscord,
-} from "./discord_utils.ts";
-import { fetchUserAvailability, TimeRange } from "./request_utils.ts";
-import { getDb, saveDb } from "./db_utils.ts";
-import { toJakartaDate } from "./date_utils.ts";
+  blastMessagesToAllWebhooks,
+  handleBlastResult,
+} from "./webhook_utils.ts";
 
-const { availableUsers, unavailableUsers } = await fetchUserAvailability();
+const now = new Date();
+logger().info(`Starting check for ${now.toISOString()}`);
+
+const { allAvailableUsers, allUnavailableUsers } =
+  await fetchAllUsersAvailability({ date: now });
+
+const configs = await loadConfigs();
+const { webhooksConfig } = configs;
+
+const userIdsForReporting = new Set(getUserIdsForReporting(webhooksConfig));
+
+const [
+  availableUsers,
+  unavailableUsers,
+] = [
+  allAvailableUsers.filter((u) => userIdsForReporting.has(u.id)),
+  allUnavailableUsers.filter((u) => userIdsForReporting.has(u.id)),
+];
 
 const oldDb = await getDb();
-const users = { ...oldDb.users };
-const ptos = { ...oldDb.ptos };
-const unavailabilities = { ...oldDb.unavailabilities };
 
-for (const user of availableUsers) {
-  users[user.id] = {
-    id: user.id,
-    name: user.name,
-  };
-
-  for (const pto of user.ptoRequests) {
-    ptos[pto.id] = {
-      ...pto,
-      userId: user.id,
+const newDbUsers: Db["users"] = [
+  ...availableUsers,
+  ...unavailableUsers,
+].reduce(
+  (acc, user) => {
+    acc[user.id] = {
+      id: user.id,
+      name: user.name,
     };
-  }
-}
-const separator = "|";
-function makeUnavailabilityId(
-  { userId }: { userId: string },
-) {
-  return [userId, toJakartaDate(new Date())].join(separator);
-}
+    return acc;
+  },
+  // Use old DB users as initial value
+  // so we keep record of the old users
+  // even though the new config don't do reporting on the old users.
+  { ...oldDb.users },
+);
 
-for (const user of unavailableUsers) {
-  users[user.id] = {
-    id: user.id,
-    name: user.name,
-  };
-
-  const unavailabilityId = makeUnavailabilityId({
-    userId: user.id,
+const newUnavailabilities = unavailableUsers
+  .map((u) => mapUnavailUserToDbUnavailTuple(u))
+  .filter(([unavailId, _]) => !oldDb.unavailabilities?.[unavailId])
+  .map(([unavailabilityId, unavailability]) => {
+    return {
+      unavailabilityId,
+      unavailability,
+      formattedMsg: formatUnavailabilityMessage({
+        users: newDbUsers,
+        unavailability,
+      }),
+    };
   });
-  unavailabilities[unavailabilityId] = {
-    userId: user.id,
-    availability: user.availability,
-    unavailableTime: user.unavailableTime,
-  };
-}
 
-const addedPtos = Object.values(ptos).filter((pto) => !oldDb.ptos?.[pto.id]);
-const removedPtos = Object.values(oldDb.ptos || {}).filter((pto) =>
-  !ptos[pto.id]
-);
-const addedUnavailabilities = Object.keys(unavailabilities).filter((
-  unavailabilityId,
-) => !oldDb.unavailabilities?.[unavailabilityId]).map((unavailabilityId) =>
-  unavailabilities[unavailabilityId]
-);
+const newDbUnavailabilities: Db["unavailabilities"] = newUnavailabilities
+  .reduce((acc, u) => {
+    acc[u.unavailabilityId] = u.unavailability;
+    return acc;
+  }, { ...oldDb.unavailabilities });
 
-function getFirstName({ userId }: { userId: string }) {
-  return users[userId]?.name.split(" ")[0] || "<no name>";
-}
+// TODO: this DB update logic needs to be factored out
+const newDb: Db = {
+  ...oldDb,
+  users: newDbUsers,
+  unavailabilities: newDbUnavailabilities,
+};
 
-const addedPtoMessages = addedPtos.map((addedPto) =>
-  `✅ PTO approved for ${
-    getFirstName({ userId: addedPto.userId })
-  }, happening ${
-    formatDateForDiscord(new Date(addedPto.requestDate), "relative")
-  } for ${addedPto.totalDay} day(s).`
-);
+const messages: Array<MessageToSend> = [
+  ...newUnavailabilities.map((u) => ({
+    message: u.formattedMsg,
+    userId: u.unavailability.userId,
+  })),
+];
 
-function formatTimeRange(timeRange: TimeRange) {
-  switch (timeRange) {
-    case "FULL_DAY":
-      return "for all day";
-    case "MORNING":
-    case "AFTERNOON":
-    case "EVENING":
-      return `at ${timeRange.toLowerCase()}`;
-    default:
-      return `at ${timeRange} (raw)`;
-  }
-}
-const addedUnavailabilityMessages = addedUnavailabilities.map((unavail) => {
-  const firstName = getFirstName({ userId: unavail.userId });
-  const formattedUnavailTime = formatTimeRange(unavail.unavailableTime);
-  switch (unavail.availability) {
-    case "onSickLeave":
-      return `😷 ${firstName} will be on sick leave today ${formattedUnavailTime}.`;
-    case "onPto":
-      return `🏝️ ${firstName} will be unavailable today ${formattedUnavailTime}.`;
-    default:
-      return `🧨 ${firstName} will be missing today ${formattedUnavailTime}. (debug: ${unavail.availability})`;
-  }
-});
+const blastResult = await blastMessagesToAllWebhooks(configs, messages);
 
-const message = [
-  ...addedPtoMessages,
-  ...addedUnavailabilityMessages,
-].join("\n");
+await handleBlastResult({ configs, result: blastResult, newDb });
 
-// TODO: Need major refactor to make the initial fetch dont do any filter
-// (or filter based on flattened webhooks config),
-// iterate over the config to craft the messages and send per webhook URL.
-await blastMessageToAllWebooks(message);
+// TODO: PTO needs to be reimplemented
+// OLD implementation
 
-for (const addedPto of addedPtos) {
-  const message = `Added PTO for ${
-    users[addedPto.userId]
-      ?.name
-  }: ${addedPto.requestDate} - ${addedPto.endDate}`;
-  console.log(message);
-}
-for (const removedPto of removedPtos) {
-  console.log(
-    `Removed PTO for ${
-      users[removedPto.userId]
-        ?.name
-    }: ${removedPto.requestDate} - ${removedPto.endDate}`,
-  );
-}
-for (const addedUnavailability of addedUnavailabilities) {
-  console.log(
-    `Added Unavailability for ${
-      users[addedUnavailability.userId]
-        ?.name
-    }: ${addedUnavailability.availability} - ${addedUnavailability.unavailableTime}`,
-  );
-}
+// const users = { ...oldDb.users };
+// const ptos = { ...oldDb.ptos };
+// const unavailabilities = { ...oldDb.unavailabilities };
 
-await saveDb({ users, ptos, unavailabilities });
+// for (const user of availableUsers) {
+//   users[user.id] = {
+//     id: user.id,
+//     name: user.name,
+//   };
 
-console.log("Done");
+//   for (const pto of user.ptoRequests) {
+//     ptos[pto.id] = {
+//       ...pto,
+//       userId: user.id,
+//     };
+//   }
+// }
+
+// const addedPtos = Object.values(ptos).filter((pto) => !oldDb.ptos?.[pto.id]);
+// const removedPtos = Object.values(oldDb.ptos || {}).filter((pto) =>
+//   !ptos[pto.id]
+// );
+
+// const message = [
+//   ...addedPtoMessages,
+//   ...addedUnavailabilityMessages,
+// ].join("\n");
+
+// // TODO: Need major refactor to make the initial fetch dont do any filter
+// // (or filter based on flattened webhooks config),
+// // iterate over the config to craft the messages and send per webhook URL.
+// await blastMessageToAllWebooks(message);
+
+// for (const addedPto of addedPtos) {
+//   const message = `Added PTO for ${
+//     users[addedPto.userId]
+//       ?.name
+//   }: ${addedPto.requestDate} - ${addedPto.endDate}`;
+//   console.log(message);
+// }
+// for (const removedPto of removedPtos) {
+//   console.log(
+//     `Removed PTO for ${
+//       users[removedPto.userId]
+//         ?.name
+//     }: ${removedPto.requestDate} - ${removedPto.endDate}`,
+//   );
+// }
+// for (const addedUnavailability of addedUnavailabilities) {
+//   console.log(
+//     `Added Unavailability for ${
+//       users[addedUnavailability.userId]
+//         ?.name
+//     }: ${addedUnavailability.availability} - ${addedUnavailability.unavailableTime}`,
+//   );
+// }

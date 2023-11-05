@@ -167,3 +167,88 @@ export async function fetchUserAvailability() {
     unavailableUsers: unavailable,
   };
 }
+
+export async function fetchAllUsersAvailability({ date }: { date: Date }) {
+  const res = await fetch(apiUrl, {
+    method: "POST",
+    headers: {
+      ...defaultAuthenticatedHeaders,
+      authorization: `Bearer ${(await renewUserToken()).token}`,
+    },
+    body: JSON.stringify({
+      operationName: "UsersAvailabilityAndBirthday",
+      variables: {
+        date: date.toISOString(),
+        queryName: "",
+        projects: [],
+      },
+      query: `
+  query UsersAvailabilityAndBirthday($queryName: String, $projects: [String!], $date: String) {
+    usersAvailabilityAndBirthday(
+      input: {date: $date, queryName: $queryName, projects: $projects}
+    ) {
+      birthday {
+        ...UserWithPTOAndSickLeave
+        __typename
+      }
+      unavailable {
+        __typename
+        ... on UserWithPtoAndSickleave {
+          ...UserWithPTOAndSickLeave
+          __typename
+        }
+        ... on GuestUserWithAvailability {
+          ...GuestUserWithAvailability
+          __typename
+        }
+      }
+      available {
+        __typename
+        ... on UserWithPtoAndSickleave {
+          ...UserWithPTOAndSickLeave
+          __typename
+        }
+        ... on GuestUserWithAvailability {
+          ...GuestUserWithAvailability
+          __typename
+        }
+      }
+      __typename
+    }
+  }
+  
+  fragment UserWithPTOAndSickLeave on UserWithPtoAndSickleave {
+    id
+    name
+    availability
+    unavailableTime
+    ptoRequests {
+      id
+      requestDate
+      endDate
+  
+      totalDay
+      status
+      requestReason
+      unavailableTime
+  
+      __typename
+    }
+    __typename
+  }
+  
+  fragment GuestUserWithAvailability on GuestUserWithAvailability {
+    id
+    __typename
+  }
+  `,
+    }),
+  });
+  const json = await res.json();
+  const { data } = resSchema.parse(json);
+  const { available, unavailable } = data.usersAvailabilityAndBirthday;
+  return {
+    allAvailableUsers: available,
+    allUnavailableUsers: unavailable,
+  };
+}

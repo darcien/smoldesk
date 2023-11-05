@@ -1,23 +1,16 @@
-import { load, RESTPostAPIWebhookWithTokenJSONBody } from "./deps.ts";
-
-const config = await load();
-
-const allWebhookUrls = config.DISCORD_WEBHOOK_URLS.replaceAll(/[\n ]/g, "")
-  .split(
-    ",",
-  ).filter((url) => (url.trim()).length > 0);
-
-console.log({ allWebhookUrls });
-
-if (allWebhookUrls.length === 0) {
-  throw new Error(
-    "Need at least one webhook url configured via DISCORD_WEBHOOK_URLS",
-  );
-}
+import {
+  Configs,
+  DiscordWebhookConfig,
+  getUserIdsFromDiscordConfig,
+  RuntimeConfig,
+} from "./config_utils.ts";
+import { RESTPostAPIWebhookWithTokenJSONBody } from "./deps.ts";
+import { logger } from "./logger_utils.ts";
 
 async function sendMessageToWebhook(
   { message, webhookUrl }: { message: string; webhookUrl: string },
 ) {
+  // TODO: this webhook config should be customizeable
   const body: RESTPostAPIWebhookWithTokenJSONBody = {
     username: "Bernard (PM)",
     avatar_url:
@@ -38,28 +31,158 @@ async function sendMessageToWebhook(
   return res;
 }
 
-export async function blastMessageToAllWebooks(message: string) {
-  const all = await Promise.allSettled(
-    allWebhookUrls.map((webhookUrl) =>
-      sendMessageToWebhook({ message, webhookUrl })
-    ),
-  );
-
-  const failed = all.filter((res) => res.status === "rejected");
-  if (failed.length > 0) {
-    console.log(
-      `Failed to send to ${failed.length} out of ${all.length} webhooks`,
-      { failed },
-    );
-  }
-
-  return all;
+export enum BlastResult {
+  OkAllSent,
+  OkPartiallySent,
+  OkSkipped,
+  Error,
 }
 
-export function formatDateForDiscord(
-  date: Date,
-  format: "relative" | "short date",
+export type MessageToSend = {
+  message: string;
+  userId: string;
+};
+
+export enum SendWebhookSafelyResult {
+  OkSent,
+  OkSkipped,
+  OkDisabled,
+  OkDryRun,
+  Error,
+}
+
+async function sendMessagesToSingleWebhookSafely(
+  {
+    runtimeConfig,
+    discordConfig,
+    messages,
+  }: {
+    runtimeConfig: RuntimeConfig;
+    discordConfig: DiscordWebhookConfig;
+    messages: Array<MessageToSend>;
+  },
 ) {
-  const discordFormat = format === "relative" ? "R" : "d";
-  return `<t:${Math.floor(date.getTime() / 1000)}:${discordFormat}>`;
+  if (discordConfig.disabled) {
+    logger().info(
+      `[${discordConfig.description}] Disabled from config, skipping`,
+    );
+    return SendWebhookSafelyResult.OkDisabled;
+  }
+
+  // Each config could specify different users to report
+  const userIds = new Set(getUserIdsFromDiscordConfig(discordConfig));
+  const messagesToSend = messages
+    .filter((m) => userIds.has(m.userId));
+
+  if (messagesToSend.length === 0) {
+    logger().info(
+      `[${discordConfig.description}] No message to send, skipping`,
+    );
+    return SendWebhookSafelyResult.OkSkipped;
+  }
+
+  const formattedMessage = messagesToSend
+    .join("\n");
+
+  if (runtimeConfig.dryRun) {
+    logger().info(
+      `[${discordConfig.description}] Running in dry run mode, message:
+${formattedMessage}`,
+    );
+    return SendWebhookSafelyResult.OkDryRun;
+  }
+
+  logger().info(
+    `[${discordConfig.description}] Attempting to send message, message:
+${formattedMessage}`,
+  );
+
+  try {
+    const res = await sendMessageToWebhook({
+      message: formattedMessage,
+      webhookUrl: discordConfig.url,
+    });
+
+    if (res.ok) {
+      logger().info(
+        `[${discordConfig.description}] Webhook message sent`,
+      );
+      return SendWebhookSafelyResult.OkSent;
+    }
+
+    const badResDetail = {
+      status: res.status,
+      statusText: res.statusText,
+      body: await res.text(),
+    };
+    logger().info(
+      `[${discordConfig.description}] Discord does not respond with OK status, detail: ${
+        JSON.stringify(badResDetail)
+      }`,
+    );
+    return [SendWebhookSafelyResult.Error, {
+      status: res.status,
+      statusText: res.statusText,
+      body: await res.text(),
+    }] as const;
+  } catch (error) {
+    logger().info(
+      `[${discordConfig.description}], Error when sending message to Discord, error: ${error}`,
+    );
+    return [SendWebhookSafelyResult.Error, error] as const;
+  }
+}
+
+export async function blastMessagesToDiscord(
+  {
+    webhooksConfig,
+    runtimeConfig,
+  }: Configs,
+  messages: Array<MessageToSend>,
+) {
+  const discordWebhooks = webhooksConfig.discord ?? [];
+
+  if (discordWebhooks.length === 0) {
+    return BlastResult.OkSkipped;
+  }
+
+  const allResults = await Promise.all(
+    discordWebhooks
+      .map((discordConfig) =>
+        sendMessagesToSingleWebhookSafely({
+          discordConfig,
+          runtimeConfig,
+          messages,
+        })
+      ),
+  );
+
+  if (
+    allResults.every((r) =>
+      r === SendWebhookSafelyResult.OkSkipped ||
+      r === SendWebhookSafelyResult.OkDisabled ||
+      r === SendWebhookSafelyResult.OkDryRun
+    )
+  ) {
+    return BlastResult.OkSkipped;
+  }
+
+  if (
+    allResults.every((r) => r === SendWebhookSafelyResult.OkSent)
+  ) {
+    return BlastResult.OkAllSent;
+  }
+
+  if (
+    allResults.some((r) =>
+      r === SendWebhookSafelyResult.OkSent ||
+      r === SendWebhookSafelyResult.OkSkipped ||
+      r === SendWebhookSafelyResult.OkDisabled ||
+      r === SendWebhookSafelyResult.OkDryRun
+    )
+  ) {
+    return BlastResult.OkPartiallySent;
+  }
+
+  return BlastResult.Error;
 }

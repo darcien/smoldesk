@@ -1,5 +1,5 @@
 import { zodToJsonSchema } from "./deps.ts";
-import { webhooksConfigSchema } from "./webhoook_utils.ts";
+import { webhooksConfigSchema } from "./config_utils.ts";
 
 const schemaByFilename = {
   webhooks: webhooksConfigSchema,

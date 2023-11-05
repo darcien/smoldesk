@@ -1,0 +1,16 @@
+{
+  "$schema": "./webhooks.schema.json",
+  "discord": [
+    {
+      "description": "my human friendly webhook name",
+      "disabled": false,
+      "url": "https://my-discord-webhook-url.example.com",
+      "filter": {
+        "userIds": [
+          "<user_id> free comment here",
+          "<user_id> can filter out specific user to report"
+        ]
+      }
+    }
+  ]
+}
