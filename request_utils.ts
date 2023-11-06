@@ -1,4 +1,5 @@
 import { load, z } from "./deps.ts";
+import { logger } from "./logger_utils.ts";
 
 const config = await load();
 
@@ -172,6 +173,9 @@ export async function fetchUserAvailability() {
 }
 
 export async function fetchAllUsersAvailability({ date }: { date: Date }) {
+  const t0 = performance.now();
+
+  logger().info(`[request] sending UsersAvailabilityAndBirthday query...`);
   const res = await fetch(apiUrl, {
     method: "POST",
     headers: {
@@ -247,9 +251,25 @@ export async function fetchAllUsersAvailability({ date }: { date: Date }) {
   `,
     }),
   });
+
+  const t1 = performance.now();
+  logger().info(
+    `[request] UsersAvailabilityAndBirthday query finished in ${t1 - t0}ms`,
+  );
+
   const json = await res.json();
+  logger().info(
+    `[request] Parsing UsersAvailabilityAndBirthday query response as JSON`,
+  );
+
   const { data } = resSchema.parse(json);
+  logger().info(
+    `[request] Parsing UsersAvailabilityAndBirthday JSON with runtime schema`,
+  );
   const { available, unavailable } = data.usersAvailabilityAndBirthday;
+  logger().info(
+    `[request] UsersAvailabilityAndBirthday response valid, unavailableUsersCount=${unavailable.length}`,
+  );
   return {
     allAvailableUsers: available,
     allUnavailableUsers: unavailable,
