@@ -1,4 +1,5 @@
 import { load, z } from "./deps.ts";
+import { UsersAvailabilityAndBirthdayQuery } from "./graphql_utils.ts";
 import { logger } from "./logger_utils.ts";
 
 const config = await load();
@@ -49,6 +50,8 @@ const defaultAuthenticatedHeaders = {
   "content-type": "application/json",
 };
 
+const defaultRequestTimeoutInMs = 10_000;
+
 const refreshSessionSchema = z.object({
   data: z.object({
     refreshSession: z.object({
@@ -58,30 +61,120 @@ const refreshSessionSchema = z.object({
   }),
 });
 
-export async function renewUserToken() {
+// This is not really authenticated since we rely on refreshing token
+// before every call.
+// TODO: refactor this to actually refresh if needed
+async function execAuthenticatedOperation(
+  {
+    operationName,
+    variables,
+    query,
+    additionalHeaders,
+  }: {
+    operationName: string;
+    variables: Record<string, unknown>;
+    query: string;
+    additionalHeaders?: HeadersInit;
+  },
+) {
+  const t0 = performance.now();
+  logger().info(`[request] executing operation ${operationName}`);
+
   const res = await fetch(apiUrl, {
-    "method": "POST",
-    "headers": {
+    method: "POST",
+    headers: {
       ...defaultAuthenticatedHeaders,
+      ...additionalHeaders,
     },
-    "body": JSON.stringify({
-      "operationName": "RefreshSession",
-      "variables": {
-        "refreshToken": refreshToken,
-      },
-      "query": `
+    signal: AbortSignal.timeout(defaultRequestTimeoutInMs),
+    body: JSON.stringify({
+      operationName,
+      variables,
+      query,
+    }),
+  });
+
+  const t1 = performance.now();
+  logger().info(
+    `[request] operation ${operationName} finished in ${t1 - t0}ms`,
+  );
+  return res;
+}
+
+export async function renewUserToken() {
+  const res = await execAuthenticatedOperation({
+    operationName: "RefreshSession",
+    variables: {
+      refreshToken,
+    },
+    query: `
 mutation RefreshSession($refreshToken: String!) {
   refreshSession(refreshToken: $refreshToken) {
     token
     refreshToken
   }
 }`,
-      // "mutation RefreshSession($refreshToken: String!) {\\n  refreshSession(refreshToken: $refreshToken) {\\n    user {\\n      id\\n      email\\n      name\\n      avatar\\n      role\\n      title\\n      discord\\n      github\\n      phone\\n      totalAvailablePto\\n      totalAvailableSickLeave\\n      hireDate\\n      deviceIDs\\n      projects {\\n        id\\n        title\\n        users {\\n          id\\n          avatar\\n          name\\n          role\\n          title\\n          __typename\\n        }\\n        __typename\\n      }\\n      totalPtoRequestPending {\\n        totalPtoPending\\n        totalPendingDays\\n        __typename\\n      }\\n      totalSickleavePending\\n      __typename\\n    }\\n    token\\n    refreshToken\\n    __typename\\n  }\\n}\\n",
-    }),
   });
 
   const json = await res.json();
   return refreshSessionSchema.parse(json).data.refreshSession;
+}
+
+export enum FetchResult {
+  Ok,
+  ErrorTimeout,
+  ErrorUnknown,
+}
+
+// TODO: this request module needs cleaned up
+export async function fetchAllUsersAvailability({ date }: { date: Date }) {
+  try {
+    const newToken = (await renewUserToken()).token;
+
+    const res = await execAuthenticatedOperation({
+      additionalHeaders: {
+        authorization: `Bearer ${newToken}`,
+      },
+      operationName: "UsersAvailabilityAndBirthday",
+      variables: {
+        date: date.toISOString(),
+        queryName: "",
+        projects: [],
+      },
+      query: UsersAvailabilityAndBirthdayQuery,
+    });
+
+    const json = await res.json();
+    logger().info(
+      `[request] Parsing UsersAvailabilityAndBirthday query response as JSON`,
+    );
+
+    const { data } = resSchema.parse(json);
+    logger().info(
+      `[request] Parsing UsersAvailabilityAndBirthday JSON with runtime schema`,
+    );
+    const { available, unavailable } = data.usersAvailabilityAndBirthday;
+    logger().info(
+      `[request] UsersAvailabilityAndBirthday response valid, unavailableUsersCount=${unavailable.length}`,
+    );
+    return {
+      status: FetchResult.Ok,
+      allAvailableUsers: available,
+      allUnavailableUsers: unavailable,
+    };
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === "TimeoutError") {
+      return {
+        status: FetchResult.ErrorTimeout,
+        error,
+      };
+    } else {
+      return {
+        status: FetchResult.ErrorUnknown,
+        error,
+      };
+    }
+  }
 }
 
 /**
@@ -169,109 +262,5 @@ export async function fetchUserAvailability() {
   return {
     availableUsers: available,
     unavailableUsers: unavailable,
-  };
-}
-
-export async function fetchAllUsersAvailability({ date }: { date: Date }) {
-  const t0 = performance.now();
-
-  logger().info(`[request] sending UsersAvailabilityAndBirthday query...`);
-  const res = await fetch(apiUrl, {
-    method: "POST",
-    headers: {
-      ...defaultAuthenticatedHeaders,
-      authorization: `Bearer ${(await renewUserToken()).token}`,
-    },
-    body: JSON.stringify({
-      operationName: "UsersAvailabilityAndBirthday",
-      variables: {
-        date: date.toISOString(),
-        queryName: "",
-        projects: [],
-      },
-      query: `
-  query UsersAvailabilityAndBirthday($queryName: String, $projects: [String!], $date: String) {
-    usersAvailabilityAndBirthday(
-      input: {date: $date, queryName: $queryName, projects: $projects}
-    ) {
-      birthday {
-        ...UserWithPTOAndSickLeave
-        __typename
-      }
-      unavailable {
-        __typename
-        ... on UserWithPtoAndSickleave {
-          ...UserWithPTOAndSickLeave
-          __typename
-        }
-        ... on GuestUserWithAvailability {
-          ...GuestUserWithAvailability
-          __typename
-        }
-      }
-      available {
-        __typename
-        ... on UserWithPtoAndSickleave {
-          ...UserWithPTOAndSickLeave
-          __typename
-        }
-        ... on GuestUserWithAvailability {
-          ...GuestUserWithAvailability
-          __typename
-        }
-      }
-      __typename
-    }
-  }
-  
-  fragment UserWithPTOAndSickLeave on UserWithPtoAndSickleave {
-    id
-    name
-    availability
-    unavailableTime
-    ptoRequests {
-      id
-      requestDate
-      endDate
-  
-      totalDay
-      status
-      requestReason
-      unavailableTime
-  
-      __typename
-    }
-    __typename
-  }
-  
-  fragment GuestUserWithAvailability on GuestUserWithAvailability {
-    id
-    __typename
-  }
-  `,
-    }),
-  });
-
-  const t1 = performance.now();
-  logger().info(
-    `[request] UsersAvailabilityAndBirthday query finished in ${t1 - t0}ms`,
-  );
-
-  const json = await res.json();
-  logger().info(
-    `[request] Parsing UsersAvailabilityAndBirthday query response as JSON`,
-  );
-
-  const { data } = resSchema.parse(json);
-  logger().info(
-    `[request] Parsing UsersAvailabilityAndBirthday JSON with runtime schema`,
-  );
-  const { available, unavailable } = data.usersAvailabilityAndBirthday;
-  logger().info(
-    `[request] UsersAvailabilityAndBirthday response valid, unavailableUsersCount=${unavailable.length}`,
-  );
-  return {
-    allAvailableUsers: available,
-    allUnavailableUsers: unavailable,
   };
 }

@@ -1,5 +1,5 @@
 import { MessageToSend } from "./discord_utils.ts";
-import { fetchAllUsersAvailability } from "./request_utils.ts";
+import { fetchAllUsersAvailability, FetchResult } from "./request_utils.ts";
 import { Db, getDb } from "./db_utils.ts";
 import { getUserIdsForReporting, loadConfigs } from "./config_utils.ts";
 import { mapUnavailUserToDbUnavailTuple } from "./map_utils.ts";
@@ -9,15 +9,36 @@ import {
   blastMessagesToAllWebhooks,
   handleBlastResult,
 } from "./webhook_utils.ts";
+import { sendHeartbeat } from "./heartbeat_utils.ts";
 
 const now = new Date();
 logger().info(`Starting check for ${now.toISOString()}`);
 
-const { allAvailableUsers, allUnavailableUsers } =
-  await fetchAllUsersAvailability({ date: now });
-
 const configs = await loadConfigs();
-const { webhooksConfig } = configs;
+const { envConfig, webhooksConfig } = configs;
+
+const fetchResult = await fetchAllUsersAvailability({ date: now });
+
+if (fetchResult.status !== FetchResult.Ok) {
+  switch (fetchResult.status) {
+    case FetchResult.ErrorTimeout: {
+      logger().error("[request] request timed out");
+      sendHeartbeat(envConfig, { msg: "request timed out" });
+      break;
+    }
+    case FetchResult.ErrorUnknown: {
+      logger().error(
+        `[request] request failed, error=${fetchResult.error}`,
+        fetchResult.error,
+      );
+      sendHeartbeat(envConfig, { msg: "request failed" });
+      break;
+    }
+  }
+  Deno.exit(0);
+}
+
+const { allAvailableUsers = [], allUnavailableUsers = [] } = fetchResult;
 
 const userIdsForReporting = new Set(getUserIdsForReporting(webhooksConfig));
 
