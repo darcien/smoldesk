@@ -139,7 +139,8 @@ export async function fetchAllUsersAvailability({ date }: { date: Date }) {
       variables: {
         date: date.toISOString(),
         queryName: "",
-        projects: [],
+        // Don't send empty projects array, it will return no users
+        // projects: [],
       },
       query: UsersAvailabilityAndBirthdayQuery,
     });

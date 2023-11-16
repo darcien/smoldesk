@@ -11,6 +11,7 @@ type UptimeKumaHeartbeat = {
 };
 
 // TODO: make heartbeat respect dry run
+// TODO: dont fail if heartbeat fails
 export async function sendHeartbeat(
   envConfig: EnvConfig,
   { status = "up", msg, ping }: UptimeKumaHeartbeat,
