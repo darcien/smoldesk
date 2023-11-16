@@ -82,6 +82,7 @@ async function sendMessagesToSingleWebhookSafely(
   }
 
   const formattedMessage = messagesToSend
+    .map((m) => m.message)
     .join("\n");
 
   if (runtimeConfig.dryRun) {
