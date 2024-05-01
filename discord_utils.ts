@@ -121,11 +121,7 @@ ${formattedMessage}`,
         JSON.stringify(badResDetail)
       }`,
     );
-    return [SendWebhookSafelyResult.Error, {
-      status: res.status,
-      statusText: res.statusText,
-      body: await res.text(),
-    }] as const;
+    return [SendWebhookSafelyResult.Error, badResDetail] as const;
   } catch (error) {
     logger().info(
       `[${discordConfig.description}], Error when sending message to Discord, error: ${error}`,
