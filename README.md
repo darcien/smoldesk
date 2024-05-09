@@ -2,16 +2,21 @@
 
 Unofficial Discord bridge for [kodesk](https://github.com/kodefox/kodesk/).
 
-## What does this do?
+## What is this?
 
-1. Fetch user PTO and availability availability data from kodesk, authenticated as the configured token.
-2. If new PTO or unavailability is found, send notification messages Discord channels via webhook.
-3. Save found data in local db.json to avoid sending same notification more than once.
+This is a script that fetch employees PTO and sick leaves from kodesk,
+and if new ones are found, send messages to Discord text channel.
+
+## Why?
+
+I thought it would be nice to be notified about teammates unavailabilities
+via the usual chat.
 
 ## Caveats
 
-- Hardcoded project id makes it impossible to configure different webhook URL for different project.
-  - This can be solved by implementing a config file.
+- ~~Hardcoded project id makes it impossible to configure
+  different webhook URL for different project.~~
+  Config file is now implemented to support this.
 - No retry mechanism when sending webhook failed.
 - No updates to sent notification if data is updated (e.g. canceled after approved).
 - Rely on long lived refresh token to keep running.
