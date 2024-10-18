@@ -34,6 +34,14 @@ if (fetchResult.status !== FetchResult.Ok) {
       sendHeartbeat(envConfig, { msg: "request failed" });
       break;
     }
+    case FetchResult.ErrorMalformedResponse: {
+      logger().error(
+        `[request] bad response from server, error=${fetchResult.error}`,
+        fetchResult.error,
+      );
+      sendHeartbeat(envConfig, { msg: "malformed response" });
+      break;
+    }
   }
   Deno.exit(0);
 }

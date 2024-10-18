@@ -48,6 +48,8 @@ if (apiUrl === "") {
 const defaultAuthenticatedHeaders = {
   authorization: `Bearer ${userToken}`,
   "content-type": "application/json",
+  "x-client-timezone": "Asia/Jakarta",
+  "x-client-time": new Date().toISOString(),
 };
 
 const defaultRequestTimeoutInMs = 10_000;
@@ -122,6 +124,7 @@ mutation RefreshSession($refreshToken: String!) {
 
 export enum FetchResult {
   Ok,
+  ErrorMalformedResponse,
   ErrorTimeout,
   ErrorUnknown,
 }
@@ -145,16 +148,41 @@ export async function fetchAllUsersAvailability({ date }: { date: Date }) {
       query: UsersAvailabilityAndBirthdayQuery,
     });
 
+    if (!res.ok) {
+      logger().warning(
+        `[request] Not ok response from server, status=${res.status}`,
+      );
+      return {
+        status: FetchResult.ErrorUnknown,
+        error: new Error(
+          `Not ok response from server, status=${res.status}, body=${await res
+            .text()}`,
+        ),
+      };
+    }
+
     const json = await res.json();
     logger().info(
       `[request] Parsing UsersAvailabilityAndBirthday query response as JSON`,
     );
 
-    const { data } = resSchema.parse(json);
-    logger().info(
-      `[request] Parsing UsersAvailabilityAndBirthday JSON with runtime schema`,
-    );
-    const { available, unavailable } = data.usersAvailabilityAndBirthday;
+    const parseRes = resSchema.safeParse(json);
+
+    if (!parseRes.success) {
+      logger().warning(
+        `[request] Failed to parse UsersAvailabilityAndBirthday JSON, error=${parseRes.error.message}`,
+      );
+      logger().info(
+        `[request] Raw response body: ${JSON.stringify(json, null, 2)}`,
+      );
+      return {
+        status: FetchResult.ErrorMalformedResponse,
+        error: parseRes.error,
+      };
+    }
+
+    const { available, unavailable } =
+      parseRes.data.data.usersAvailabilityAndBirthday;
     logger().info(
       `[request] UsersAvailabilityAndBirthday response valid, unavailableUsersCount=${unavailable.length}`,
     );
