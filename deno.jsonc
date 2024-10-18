@@ -1,5 +1,11 @@
 {
+  "fmt": {
+    "exclude": [
+      "**/*.md"
+    ]
+  },
   "tasks": {
+    "check": "deno fmt & deno lint & deno check **/*.ts",
     "schema": "deno run --allow-write=. make_json_schema.ts",
     "blast": "deno run --allow-read=. --allow-write=. --allow-env --allow-net --allow-hrtime mod.ts",
     "blast:dry": "deno run --allow-read=. --allow-write=. --allow-env --allow-net --allow-hrtime mod.ts --dry-run",
