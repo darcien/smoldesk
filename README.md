@@ -4,13 +4,30 @@ Unofficial Discord bridge for [kodesk](https://github.com/kodefox/kodesk/).
 
 ## What is this?
 
-This is a script that fetch employees PTO and sick leaves from kodesk,
-and if new ones are found, send messages to Discord text channel.
+This is a script that fetch employees availability from kodesk and notify
+the other team members via Discord webhook if there are any unavailability
+at the day.
 
 ## Why?
 
 I thought it would be nice to be notified about teammates unavailabilities
 via the usual chat.
+
+## How to run?
+
+You need deno installed globally and you must have login access to Kodesk.
+
+- `cp .env.example .env`
+- Replace the example value in `.env` with actual value
+- (Optional) `deno task schema` to generate JSON schema for the webhook config
+- `cp webhooks.example.json webhooks.json`
+- Replace example value in `webhooks.json` with your webhook details
+- `deno task blast` to run the script
+  (or `deno task blast:dry` for dry run without sending actual webhook)
+
+## How does it work?
+
+TBA.
 
 ## Caveats
 

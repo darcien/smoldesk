@@ -7,8 +7,9 @@
       "url": "https://my-discord-webhook-url.example.com",
       "filter": {
         "userIds": [
-          "<user_id> free comment here",
-          "<user_id> can filter out specific user to report"
+          "<user_id>",
+          "<user_id> optional comment here for human friendly name",
+          "<user_id> only user listed in this filter will be monitored"
         ]
       }
     }

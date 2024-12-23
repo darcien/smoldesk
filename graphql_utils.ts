@@ -1,3 +1,5 @@
+// This query is obtained by inspecting the request send by
+// Kodesk client in the dashboard.
 export const UsersAvailabilityAndBirthdayQuery = `
 query UsersAvailabilityAndBirthday($queryName: String, $projects: [String!], $date: String!) {
   usersAvailabilityAndBirthday(
